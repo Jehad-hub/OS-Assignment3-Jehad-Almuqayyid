@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Random;
-// TODO (Feature 1 and Feature 2): import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantLock;
 // TODO (Feature 3):               import java.util.concurrent.Semaphore;
 
 // ANSI Color Codes for enhanced terminal output (same as Assignment 1)
@@ -105,6 +105,7 @@ class SharedStats {
 // In Assignment 1 only the main thread used the queue. Now several CPUs poll and re-enqueue processes
 // at the same time, so every access to `list` and `map` is a critical section.
 class ReadyQueue {
+    private final ReentrantLock lock = new ReentrantLock();
     private final LinkedList<Thread> list = new LinkedList<>();   // FIFO queue of threads
     private final Map<Thread, Process> map = new HashMap<>();     // thread -> process (same idea as Assignment 1)
 
@@ -116,9 +117,13 @@ class ReadyQueue {
     public void add(Process process) {
         // TODO Feature 1: protect this critical section
         Thread thread = new Thread(process);
-        list.add(thread);
-        map.put(thread, process);
-
+        lock.lock();
+        try {
+            list.add(thread);
+            map.put(thread, process);
+        } finally {
+            lock.unlock();
+        }
         // TODO Feature 3: signal that one more process is available in the queue
 
         System.out.println(Colors.BLUE + "  ➕ " + Colors.BOLD + Colors.CYAN + process.getName() + Colors.RESET +
@@ -130,6 +135,8 @@ class ReadyQueue {
     // Remove and return the thread at the head of the queue (or null if the queue is empty)
     public Thread poll() {
         // TODO Feature 1: protect this critical section
+        lock.lock();
+        try{
         if (list.isEmpty()) {
             return null;
         }
@@ -138,23 +145,37 @@ class ReadyQueue {
         list.removeFirst();                 // 2) remove the head (it may be a different thread by now!)
         return head;
     }
-
+finally {
+            lock.unlock();
+        }
+        }
     public Process processOf(Thread thread) {
         // TODO Feature 1: protect this access
+        lock.lock();
+        try {
         return map.get(thread);
     }
+        finally {
+            lock.unlock();
+        }
+        }
 
     // Names of the processes currently waiting in the queue (used to display the ready queue)
     public String snapshot() {
         // TODO Feature 1: protect this critical section
-        StringBuilder sb = new StringBuilder();
-        for (Thread t : list) {
-            if (sb.length() > 0) sb.append(" → ");
-            sb.append(map.get(t).getName());
-        }
+        lock.lock();
+        try {
+
+            StringBuilder sb = new StringBuilder();
+            for (Thread t : list) {
+                if (sb.length() > 0) sb.append(" → ");
+                sb.append(map.get(t).getName());
+            }
+
         return sb.length() == 0 ? "empty" : sb.toString();
-    }
-}
+    } finally {
+            lock.unlock();
+        }
 
 // Class representing a process (same as Assignment 1) - executes ONE time quantum per thread start
 class Process implements Runnable {
